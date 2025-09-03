@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>背诵抽查随机生成器</title>
+  <style>
+    :root{
+      --bg:#0b0f14;          /* 深色背景 */
+      --surface:#12161d;     /* 主要卡片 */
+      --surface-2:#171c24;   /* 次级卡片 */
+      --text:#e6e9ef;        /* 文字主色 */
+      --text-dim:#aeb6c2;    /* 次级文字 */
+      --primary:#8ab4ff;     /* 主色（Material风）*/
+      --primary-variant:#5c8dff;
+      --accent:#7de2d1;      /* 强调 */
+      --danger:#ff7272;
+      --ok:#7ee787;
+      --border: rgba(255,255,255,0.08);
+      --shadow: 0 10px 30px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.35);
+      --radius: 16px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background: radial-gradient(1200px 800px at 80% -20%, rgba(138,180,255,.08), transparent 60%),
+                 radial-gradient(1000px 600px at -10% 120%, rgba(125,226,209,.07), transparent 60%),
+                 var(--bg);
+      color:var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, PingFang SC, Noto Sans CJK SC, Microsoft YaHei, Helvetica, Arial, sans-serif;
+      letter-spacing:.2px;
+    }
+
+    header{
+      position:sticky; top:0; z-index:10;
+      backdrop-filter:saturate(120%) blur(8px);
+      background:linear-gradient(180deg, rgba(18,22,29,.9), rgba(18,22,29,.6));
+      border-bottom:1px solid var(--border);
+    }
+    .container{max-width:1100px; margin:0 auto; padding:20px;}
+    .title{
+      display:flex; align-items:center; gap:12px; padding:12px 0 6px;
+    }
+    .title h1{margin:0; font-size:clamp(20px, 4vw, 28px); font-weight:700;}
+    .subtitle{margin:0; color:var(--text-dim); font-size:14px}
+
+    /* Layout */
+    .grid{display:grid; grid-template-columns: 1.1fr 1.4fr; gap:18px; margin-top:18px}
+    @media (max-width: 960px){ .grid{grid-template-columns: 1fr; } }
+
+    .card{
+      background:linear-gradient(180deg, var(--surface), var(--surface-2));
+      border:1px solid var(--border); border-radius:var(--radius);
+      box-shadow:var(--shadow);
+    }
+    .card .card-hd{padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between}
+    .card .card-hd h3{margin:0; font-size:16px}
+    .card .card-bd{padding:14px 16px}
+
+    /* Forms */
+    label{display:block; font-size:13px; color:var(--text-dim); margin-bottom:6px}
+    input[type="text"], input[type="number"], select, textarea{
+      width:100%; padding:12px 14px; border-radius:12px; outline:none; border:1px solid var(--border);
+      background:#0e131a; color:var(--text); transition:border .2s, box-shadow .2s;
+    }
+    input:focus, select:focus, textarea:focus{border-color:rgba(138,180,255,.55); box-shadow:0 0 0 3px rgba(138,180,255,.18)}
+
+    .row{display:grid; grid-template-columns: 1fr 1fr; gap:12px}
+    @media (max-width: 680px){ .row{grid-template-columns:1fr} }
+
+    .btn{
+      display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:12px; border:1px solid var(--border);
+      background: linear-gradient(180deg, #19202a, #141a23); color:var(--text); cursor:pointer; user-select:none;
+      transition: transform .06s ease, background .2s ease, border-color .2s ease;
+    }
+    .btn:hover{transform: translateY(-1px); border-color: rgba(138,180,255,.35)}
+    .btn.primary{ background: linear-gradient(180deg, var(--primary), var(--primary-variant)); color:#0a0f16; border-color:transparent; font-weight:600 }
+    .btn.ghost{ background:transparent }
+    .btn.danger{ background: linear-gradient(180deg, #ffb3b3, #ff7272); color:#2b0d0d; border-color:transparent }
+
+    .chip{display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; border:1px solid var(--border); background:#0f141b; color:var(--text-dim); font-size:13px; margin:6px 6px 0 0}
+    .chip.active{ background: rgba(138,180,255,.18); color: var(--text); border-color: rgba(138,180,255,.35)}
+    .chip button{ all:unset; cursor:pointer; opacity:.7 }
+
+    .list{display:grid; gap:8px}
+    .item{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:#0f141b; color:var(--text);
+    }
+    .item small{ color:var(--text-dim) }
+
+    .toolbar{ display:flex; flex-wrap:wrap; gap:10px; align-items:center }
+
+    .result-grid{ display:grid; grid-template-columns: repeat( auto-fill, minmax(220px,1fr) ); gap:12px }
+    .result{
+      padding:14px; border-radius:16px; background:linear-gradient(180deg, #122030, #0f1723); border:1px solid rgba(138,180,255,.25);
+    }
+
+    .hint{ color:var(--text-dim); font-size:13px }
+
+    .snackbar{
+      position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
+      opacity:0; transition: all .25s ease; background:#202a36; color:var(--text); padding:10px 14px; border-radius:12px; border:1px solid var(--border); box-shadow:var(--shadow);
+    }
+    .snackbar.show{ opacity:1; transform:translateX(-50%) translateY(0) }
+
+    .kbd{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size:12px; color:var(--text-dim); border:1px solid var(--border); background:#0f141b; padding:2px 6px; border-radius:6px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="title">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M12 3l1.76 3.56 3.93.57-2.84 2.77.67 3.9L12 12.9l-3.52 1.85.67-3.9L6.3 7.13l3.93-.57L12 3z" stroke="var(--accent)" stroke-width="1.2"/>
+          <circle cx="12" cy="12" r="9" stroke="var(--primary)" stroke-width="1.2" opacity=".6"/>
+        </svg>
+        <div>
+          <h1>背诵抽查随机生成器</h1>
+          <p class="subtitle">自定义项目、分类与抽取数量 · 支持本地保存</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="grid">
+      <!-- 左侧：配置与添加 -->
+      <section class="card">
+        <div class="card-hd"><h3>添加项目</h3></div>
+        <div class="card-bd">
+          <div class="row">
+            <div>
+              <label for="itemText">项目内容</label>
+              <input id="itemText" type="text" placeholder="例如：第3段、公式F=ma、单词abandon…" />
+            </div>
+            <div>
+              <label for="itemCat">所属分类</label>
+              <div class="row" style="grid-template-columns: 1fr auto; gap:8px">
+                <select id="itemCat"></select>
+                <button id="newCatBtn" class="btn">新建分类</button>
+              </div>
+            </div>
+          </div>
+          <div class="toolbar" style="margin-top:12px">
+            <button id="addItemBtn" class="btn primary">添加到列表</button>
+            <button id="clearAllBtn" class="btn danger" title="清空全部项目与分类">清空全部</button>
+            <button id="exportBtn" class="btn">导出JSON</button>
+            <label class="btn ghost" for="importFile">导入JSON<input id="importFile" type="file" accept="application/json" style="display:none"/></label>
+          </div>
+          <p class="hint" style="margin-top:8px">提示：按 <span class="kbd">Enter</span> 可快速添加；使用导入/导出在设备间同步。</p>
+        </div>
+      </section>
+
+      <!-- 右侧：抽取控制 -->
+      <section class="card">
+        <div class="card-hd"><h3>抽取设置</h3></div>
+        <div class="card-bd">
+          <div class="row">
+            <div>
+              <label for="count">每次抽取数量</label>
+              <input id="count" type="number" min="1" value="3" />
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <div class="toolbar">
+                <button id="drawBtn" class="btn primary">随机抽取</button>
+                <button id="uniqueToggle" class="btn">不重复</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:10px">
+            <label>抽取范围（勾选分类）</label>
+            <div id="catChips"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid" style="grid-template-columns: 1fr 1fr; margin-top:18px">
+      <section class="card">
+        <div class="card-hd"><h3>项目列表</h3></div>
+        <div class="card-bd">
+          <div id="itemList" class="list"></div>
+          <p class="hint" id="emptyHint">暂无项目，先在左侧添加～</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-hd"><h3>抽取结果</h3></div>
+        <div class="card-bd">
+          <div id="result" class="result-grid"></div>
+          <p class="hint" id="resultHint">点击「随机抽取」开始。</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="snackbar" class="snackbar" role="status" aria-live="polite"></div>
+
+  <script>
+  ;(() => {
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+    const el = {
+      itemText: $('#itemText'),
+      itemCat: $('#itemCat'),
+      newCatBtn: $('#newCatBtn'),
+      addItemBtn: $('#addItemBtn'),
+      clearAllBtn: $('#clearAllBtn'),
+      exportBtn: $('#exportBtn'),
+      importFile: $('#importFile'),
+      count: $('#count'),
+      drawBtn: $('#drawBtn'),
+      uniqueToggle: $('#uniqueToggle'),
+      catChips: $('#catChips'),
+      itemList: $('#itemList'),
+      emptyHint: $('#emptyHint'),
+      result: $('#result'),
+      resultHint: $('#resultHint'),
+      snackbar: $('#snackbar')
+    };
+
+    const STORAGE_KEY = 'recite_rng_state_v1';
+
+    /** @type {{categories:string[], items: {id:string, text:string, category:string}[], settings: {count:number, unique:boolean, selectedCats:string[]}}} */
+    let state = loadState() || {
+      categories: ['默认'],
+      items: [],
+      settings: { count: 3, unique: true, selectedCats: ['默认'] }
+    };
+
+    // --- utilities ---
+    function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    function loadState(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||''); }catch(e){ return null } }
+    function uid(){ return Math.random().toString(36).slice(2, 10) }
+    function toast(msg){ el.snackbar.textContent = msg; el.snackbar.classList.add('show'); setTimeout(()=>el.snackbar.classList.remove('show'), 2000) }
+    function sanitize(s){ return (s||'').trim() }
+
+    // --- init UI ---
+    function renderCategories(){
+      // dropdown
+      el.itemCat.innerHTML = '';
+      state.categories.forEach(c=>{
+        const opt = document.createElement('option'); opt.value = c; opt.textContent = c; el.itemCat.appendChild(opt);
+      });
+
+      // chips
+      el.catChips.innerHTML = '';
+      state.categories.forEach(c=>{
+        const chip = document.createElement('span'); chip.className = 'chip' + (state.settings.selectedCats.includes(c) ? ' active' : '');
+        chip.tabIndex = 0; chip.role = 'checkbox'; chip.setAttribute('aria-checked', state.settings.selectedCats.includes(c));
+        chip.innerHTML = `<span>${c}</span>`;
+        chip.addEventListener('click', ()=> toggleCat(c));
+        chip.addEventListener('keypress', (e)=>{ if(e.key===' '||e.key==='Enter'){ e.preventDefault(); toggleCat(c); } });
+        el.catChips.appendChild(chip);
+      });
+    }
+
+    function toggleCat(c){
+      const i = state.settings.selectedCats.indexOf(c);
+      if(i>=0) state.settings.selectedCats.splice(i,1); else state.settings.selectedCats.push(c);
+      if(state.settings.selectedCats.length===0){ state.settings.selectedCats = [c]; toast('至少选中一个分类'); }
+      saveState(); renderCategories();
+    }
+
+    function renderItems(){
+      el.itemList.innerHTML = '';
+      const items = state.items.slice().reverse();
+      if(items.length===0){ el.emptyHint.style.display = 'block'; return } else { el.emptyHint.style.display = 'none' }
+      items.forEach(it=>{
+        const div = document.createElement('div'); div.className = 'item';
+        div.innerHTML = `<div><strong>${escapeHtml(it.text)}</strong><br/><small>${it.category}</small></div>
+                         <div class="toolbar">
+                           <button class="btn ghost" data-act="dup">复制</button>
+                           <button class="btn ghost" data-act="edit">编辑</button>
+                           <button class="btn danger" data-act="del">删除</button>
+                         </div>`;
+        div.querySelector('[data-act="del"]').onclick = ()=>{ delItem(it.id) };
+        div.querySelector('[data-act="dup"]').onclick = ()=>{ addItem(it.text, it.category); toast('已复制该项目'); };
+        div.querySelector('[data-act="edit"]').onclick = ()=>{ editItem(it) };
+        el.itemList.appendChild(div);
+      })
+    }
+
+    function escapeHtml(s){ return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m])) }
+
+    function ensureCategory(c){ if(!state.categories.includes(c)) state.categories.push(c); }
+
+    function addItem(text, category){
+      text = sanitize(text); category = sanitize(category) || '默认';
+      if(!text){ toast('内容不能为空'); return }
+      ensureCategory(category);
+      state.items.push({ id: uid(), text, category });
+      saveState(); renderCategories(); renderItems();
+    }
+
+    function delItem(id){
+      state.items = state.items.filter(x=>x.id!==id);
+      saveState(); renderItems();
+    }
+
+    function editItem(it){
+      const text = prompt('修改内容：', it.text);
+      if(text===null) return; // cancel
+      const cat = prompt('修改分类：', it.category) ?? it.category;
+      it.text = sanitize(text); it.category = sanitize(cat) || '默认';
+      ensureCategory(it.category);
+      saveState(); renderCategories(); renderItems();
+      toast('已更新');
+    }
+
+    function clearAll(){
+      if(confirm('确定清空所有项目与分类吗？此操作不可撤销。')){
+        state = { categories: ['默认'], items: [], settings: { count: 3, unique: true, selectedCats: ['默认'] } };
+        saveState(); renderAll(); toast('已清空');
+      }
+    }
+
+    function exportJSON(){
+      const data = JSON.stringify(state, null, 2);
+      const blob = new Blob([data], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = '背诵抽查随机生成器.json'; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importJSON(file){
+      const reader = new FileReader();
+      reader.onload = () => {
+        try{
+          const obj = JSON.parse(reader.result);
+          if(!obj || !Array.isArray(obj.categories) || !Array.isArray(obj.items)) throw new Error('invalid');
+          state = obj; saveState(); renderAll(); toast('导入成功');
+        }catch(e){ toast('导入失败：文件格式不正确'); }
+      };
+      reader.readAsText(file);
+    }
+
+    function sample(pool, k, unique){
+      const res = [];
+      if(unique){
+        const copy = pool.slice();
+        for(let i=0; i<Math.min(k, copy.length); i++){
+          const idx = Math.floor(Math.random() * copy.length);
+          res.push(copy.splice(idx,1)[0]);
+        }
+        return res;
+      } else {
+        for(let i=0; i<k; i++){
+          const idx = Math.floor(Math.random() * pool.length);
+          res.push(pool[idx]);
+        }
+        return res;
+      }
+    }
+
+    function draw(){
+      const k = Math.max(1, Number(el.count.value) || 1);
+      state.settings.count = k; saveState();
+      const selected = new Set(state.settings.selectedCats);
+      const pool = state.items.filter(it=> selected.has(it.category));
+      if(pool.length===0){ toast('所选分类下暂无项目'); return }
+      const unique = state.settings.unique;
+      const picks = sample(pool, k, unique && k <= pool.length);
+
+      el.result.innerHTML = '';
+      picks.forEach(p=>{
+        const div = document.createElement('div'); div.className = 'result';
+        div.innerHTML = `<div style="display:flex; justify-content:space-between; gap:8px; align-items:center">
+            <strong>${escapeHtml(p.text)}</strong>
+            <span class="chip" style="margin:0">${p.category}</span>
+          </div>`;
+        el.result.appendChild(div);
+      })
+      el.resultHint.style.display = picks.length ? 'none' : 'block';
+
+      if(unique && k > pool.length) toast(`数量超过可用项目数，已自动从 ${pool.length} 个项目中不重复抽取。`);
+    }
+
+    function renderAll(){
+      // count & unique
+      el.count.value = state.settings.count;
+      el.uniqueToggle.classList.toggle('primary', state.settings.unique);
+      el.uniqueToggle.textContent = state.settings.unique ? '不重复' : '可重复';
+      renderCategories();
+      renderItems();
+    }
+
+    // --- events ---
+    el.addItemBtn.addEventListener('click', ()=> addItem(el.itemText.value, el.itemCat.value));
+    el.itemText.addEventListener('keydown', e=>{ if(e.key==='Enter'){ addItem(el.itemText.value, el.itemCat.value); el.itemText.select(); }});
+    el.newCatBtn.addEventListener('click', ()=>{
+      const name = sanitize(prompt('新建分类名称：',''));
+      if(!name) return;
+      if(state.categories.includes(name)){ toast('分类已存在'); return }
+      state.categories.push(name);
+      state.settings.selectedCats.push(name);
+      saveState(); renderCategories(); toast('已创建分类');
+    });
+    el.clearAllBtn.addEventListener('click', clearAll);
+    el.exportBtn.addEventListener('click', exportJSON);
+    el.importFile.addEventListener('change', e=>{ const f = e.target.files[0]; if(f) importJSON(f); e.target.value=''; });
+    el.drawBtn.addEventListener('click', draw);
+    el.uniqueToggle.addEventListener('click', ()=>{ state.settings.unique = !state.settings.unique; saveState(); renderAll(); });
+
+    // 初始渲染
+    renderAll();
+  })();
+  </script>
+</body>
+</html>
